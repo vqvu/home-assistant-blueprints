@@ -73,6 +73,7 @@ trigger:
 
   - platform: state
     entity_id: !input suppress_device
+    from: "on"
     to: "off"
 
   - platform: event
