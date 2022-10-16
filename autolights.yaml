@@ -60,16 +60,19 @@ blueprint:
         entity:
           domain: timer
 
-# If motion is detected within the delay,
-# we restart the script.
-mode: restart
-max_exceeded: silent
+mode: queued
+max_exceeded: warning
 
 trigger:
   - platform: state
     entity_id: !input motion_entity
     from: "off"
     to: "on"
+
+  - platform: state
+    entity_id: !input enable_devices
+    from: "on"
+    to: "off"
 
   - platform: state
     entity_id: !input suppress_device
@@ -82,26 +85,35 @@ trigger:
       entity_id: !input wait_timer
 
 condition:
-  - alias: "Automation should be enabled"
-    condition: state
-    entity_id: !input enable_devices
-    match: any
-    state: "on"
   - alias: "Automation should not be suppressed"
     condition: state
     entity_id: !input suppress_device
     state: "off"
 
 action:
-  - if:
-      - alias: "Motion detected"
-        condition: state
+  - alias: "If automation is disabled"
+    if:
+      - condition: state
+        entity_id: !input enable_devices
+        match: any
+        state: "off"
+    then:
+      - alias: "Cancel the timer if it's still running"
+        service: timer.cancel
+        target:
+          entity_id: !input wait_timer
+
+      - stop: "Automation disabled. Nothing else to do."
+
+  - alias: "If motion detected"
+    if:
+      - condition: state
         entity_id: !input motion_entity
         state: "on"
     then:
-      - if:
-          - alias: "Any light is off"
-            condition: state
+      - alias: "If any light is off"
+        if:
+          - condition: state
             entity_id: !input target_lights
             match: any
             state: "off"
