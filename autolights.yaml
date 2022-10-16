@@ -1,0 +1,146 @@
+blueprint:
+  name: Motion-activated Lights
+  description: |
+    Turn on a light when motion is detected.
+
+    Can be enabled and disabled using a binary sensor.
+  domain: automation
+  input:
+    motion_entity:
+      name: Motion Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: motion
+
+    target_lights:
+      name: Lights
+      description: The lights to control. May be a group of lights.
+      selector:
+        entity:
+          domain: light
+          multiple: true
+
+    target_scenes:
+      name: Scenes
+      description: The scenes to use. Should turn on the selected lights.
+      selector:
+        entity:
+          domain: scene
+          multiple: true
+
+    enable_devices:
+      name: Enable devices
+      description: >
+        Devices that will enable the automation. For example, a time-of-day helper. The
+        automation will be enabled if any device is "on"
+      selector:
+        entity:
+          domain:
+            - binary_sensor
+            - input_boolean
+          multiple: true
+
+    suppress_device:
+      name: Suppress device
+      description: >
+        A device that will suppress the automation. For example, a toggle helper. If "on", this
+        device disables the automation regardless of the value of the "Enable device".
+      selector:
+        entity:
+          domain:
+            - binary_sensor
+            - input_boolean
+
+    wait_timer:
+      name: Wait timer
+      description: A timer device that determines how long to leave the light on after last motion is detected.
+      selector:
+        entity:
+          domain: timer
+
+# If motion is detected within the delay,
+# we restart the script.
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input motion_entity
+    from: "off"
+    to: "on"
+
+  - platform: state
+    entity_id: !input suppress_device
+    to: "off"
+
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: !input wait_timer
+
+condition:
+  - alias: "Automation should be enabled"
+    condition: state
+    entity_id: !input enable_devices
+    match: any
+    state: "on"
+  - alias: "Automation should not be suppressed"
+    condition: state
+    entity_id: !input suppress_device
+    state: "off"
+
+action:
+  - if:
+      - alias: "Motion detected"
+        condition: state
+        entity_id: !input motion_entity
+        state: "on"
+    then:
+      - if:
+          - alias: "Any light is off"
+            condition: state
+            entity_id: !input target_lights
+            match: any
+            state: "off"
+        then:
+          - alias: "Turn on the scene"
+            service: scene.turn_on
+            target:
+              entity_id: !input target_scenes
+
+      - alias: "Cancel the timer if it's still running"
+        service: timer.cancel
+        target:
+          entity_id: !input wait_timer
+
+      - alias: "Wait until there is no motion from device"
+        wait_for_trigger:
+          platform: state
+          entity_id: !input motion_entity
+          from: "on"
+          to: "off"
+
+      - alias: "Start the timer"
+        service: timer.start
+        target:
+          entity_id: !input wait_timer
+
+      - stop: "Lights turned on and timers set. Nothing else to do."
+
+  # Here, we know there is no motion.
+  - alias: "Check that some lights are on"
+    condition: state
+    entity_id: !input target_lights
+    match: any
+    state: "on"
+
+  - alias: "Check that the timer is no longer running"
+    condition: state
+    entity_id: !input wait_timer
+    state: "idle"
+
+  - alias: "Turn off the lights"
+    service: light.turn_off
+    target:
+      entity_id: !input target_lights
