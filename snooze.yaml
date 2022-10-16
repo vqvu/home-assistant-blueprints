@@ -16,8 +16,8 @@ blueprint:
         entity:
           domain: timer
 
-mode: restart
-max_exceeded: silent
+mode: queued
+max_exceeded: warning
 
 trigger:
   - platform: state
@@ -34,10 +34,11 @@ trigger:
       entity_id: !input snooze_timer
 
 action:
-  - choose:
-      - conditions:
-          - alias: "Button changed state"
-            condition: trigger
+  - alias: "Check which trigger fired"
+    choose:
+      - alias: "Button changed state"
+        conditions:
+          - condition: trigger
             id: button_state_changed
         sequence:
           - alias: "Cancel the timer if it's still running"
@@ -45,9 +46,9 @@ action:
             target:
               entity_id: !input snooze_timer
 
-          - if:
-              - alias: "Button is on"
-                condition: state
+          - alias: "If button is on"
+            if:
+              - condition: state
                 entity_id: !input target_button
                 state: "on"
             then:
@@ -55,9 +56,9 @@ action:
                 service: timer.start
                 target:
                   entity_id: !input snooze_timer
-      - conditions:
-          - alias: "Timer finished"
-            condition: trigger
+      - alias: "Timer finished"
+        conditions:
+          - condition: trigger
             id: timer_finished
         sequence:
           - alias: "Turn off the button"
