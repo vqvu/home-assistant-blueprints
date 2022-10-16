@@ -1,0 +1,66 @@
+blueprint:
+  name: Snooze button
+  source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/snooze.yaml
+  description: Implements a snooze button.
+  domain: automation
+  input:
+    target_button:
+      name: Button
+      selector:
+        entity:
+          domain: input_boolean
+
+    snooze_timer:
+      name: Snooze timer
+      selector:
+        entity:
+          domain: timer
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    id: "button_state_changed"
+    entity_id: !input target_button
+    to:
+      - "on"
+      - "off"
+
+  - platform: event
+    event_type: timer.finished
+    id: "timer_finished"
+    event_data:
+      entity_id: !input snooze_timer
+
+action:
+  - choose:
+      - conditions:
+          - alias: "Button changed state"
+            condition: trigger
+            id: button_state_changed
+        sequence:
+          - alias: "Cancel the timer if it's still running"
+            service: timer.cancel
+            target:
+              entity_id: !input snooze_timer
+
+          - if:
+              - alias: "Button is on"
+                condition: state
+                entity_id: !input target_button
+                state: "on"
+            then:
+              - alias: "Start the timer"
+                service: timer.start
+                target:
+                  entity_id: !input snooze_timer
+      - conditions:
+          - alias: "Timer finished"
+            condition: trigger
+            id: timer_finished
+        sequence:
+          - alias: "Turn off the button"
+            service: input_boolean.turn_off
+            target:
+              entity_id: !input target_button
