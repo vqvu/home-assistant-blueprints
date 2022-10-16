@@ -95,7 +95,6 @@ action:
     if:
       - condition: state
         entity_id: !input enable_devices
-        match: any
         state: "off"
     then:
       - alias: "Cancel the timer if it's still running"
