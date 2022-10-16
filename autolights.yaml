@@ -1,5 +1,6 @@
 blueprint:
   name: Autolights
+  source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/autolights.yaml
   description: |
     Turn on a light when motion is detected.
 
