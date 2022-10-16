@@ -1,5 +1,5 @@
 blueprint:
-  name: Motion-activated Lights
+  name: Autolights
   description: |
     Turn on a light when motion is detected.
 
