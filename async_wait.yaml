@@ -1,0 +1,43 @@
+blueprint:
+  name: Async Wait Ping
+  source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/async_wait.yaml
+  description: >
+    Replies to a ping after a specified amount of time. The time is extracted from the event.
+
+    Request:
+      delay: Amount of time to delay
+      reply: The reply that will be sent verbatim (in the "response" event_data field).
+  domain: automation
+  input:
+    request_event_type:
+      name: "Request event type"
+      description: "The event type to listen to."
+      default: "vqvu.async_wait.ping_request"
+      selector:
+        text:
+          type: text
+    response_event_type:
+      name: "Response event type"
+      description: "The event type to reply to."
+      default: "vqvu.async_wait.ping_response"
+      selector:
+        text:
+          type: text
+
+mode: parallel
+max_exceeded: warning
+max: 1000
+
+trigger:
+  - id: recv_request
+    platform: event
+    event_type: !input request_event_type
+
+action:
+  - alias: "Wait for requested delay"
+    delay: "{{ trigger.event.data.request.delay }}"
+
+  - alias: "Reply to request"
+    event: !input response_event_type
+    event_data:
+      response: "{{ trigger.event.data.request.reply }}"

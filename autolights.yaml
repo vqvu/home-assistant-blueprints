@@ -11,8 +11,9 @@ blueprint:
       name: Motion Sensor
       selector:
         entity:
-          domain: binary_sensor
-          device_class: motion
+          domain:
+            - binary_sensor
+            - input_boolean
 
     target_lights:
       name: Lights
@@ -30,11 +31,12 @@ blueprint:
           domain: scene
           multiple: true
 
-    enable_devices:
-      name: Enable devices
+    enable_entities:
+      name: Enable entities
       description: >
-        Devices that will enable the automation. For example, a time-of-day helper. The
-        automation will be enabled if any device is "on"
+        Entities that will enable the automation. For example, a time-of-day helper.
+        If there are multiple entities, the automation will be enabled when any of
+        the entities are on.
       selector:
         entity:
           domain:
@@ -42,11 +44,11 @@ blueprint:
             - input_boolean
           multiple: true
 
-    suppress_device:
-      name: Suppress device
+    suppress_entity:
+      name: Suppress entity
       description: >
-        A device that will suppress the automation. For example, a toggle helper. If "on", this
-        device disables the automation regardless of the value of the "Enable device".
+        An entity that will suppress the automation. For example, a toggle helper. If "on", this
+        entity disables the automation regardless of the value of the "Enable entity".
       selector:
         entity:
           domain:
@@ -60,100 +62,179 @@ blueprint:
         entity:
           domain: timer
 
+    warning_delay:
+      name: Warning delay
+      description: How long to wait in the warning state.
+      default: "00:01:00"
+      selector:
+        duration:
+
 mode: queued
 max_exceeded: warning
 
+variables:
+  inputs:
+    motion_entity: !input motion_entity
+    target_lights: !input target_lights
+    target_scenes: !input target_scenes
+    enable_entities: !input enable_entities
+    suppress_entity: !input suppress_entity
+    wait_timer: !input wait_timer
+    warning_delay: !input warning_delay
+
 trigger:
-  - platform: state
+  - id: motion_entity_changed
+    platform: state
     entity_id: !input motion_entity
-    from: "off"
-    to: "on"
+    to:
 
-  - platform: state
-    entity_id: !input enable_devices
+  - id: enable_entities_changed
+    platform: state
+    entity_id: !input enable_entities
+    from:
+
+  - id: suppress_entity_to_on
+    platform: state
+    entity_id: !input suppress_entity
     from: "on"
     to: "off"
 
-  - platform: state
-    entity_id: !input suppress_device
-    from: "on"
-    to: "off"
-
-  - platform: event
+  - id: timer_finished
+    platform: event
     event_type: timer.finished
     event_data:
       entity_id: !input wait_timer
 
+  - id: warning_timer_finished
+    platform: event
+    event_type: vqvu.async_wait.ping_response
+    event_data: {}
+
 condition:
   - alias: "Automation should not be suppressed"
     condition: state
-    entity_id: !input suppress_device
+    entity_id: !input suppress_entity
     state: "off"
 
+  - alias: "Warning timer finished is for correct event"
+    condition: template
+    value_template: >
+      {{ trigger.id != 'warning_timer_finished'
+          or trigger.event.data.response.for == this.attributes.id }}
+
 action:
-  - alias: "If automation is disabled"
-    if:
-      - condition: state
-        entity_id: !input enable_devices
-        state: "off"
-    then:
-      - alias: "Cancel the timer if it's still running"
-        service: timer.cancel
-        target:
-          entity_id: !input wait_timer
+  - alias: "Compute input states"
+    variables:
+      input_states:
+        motion: "{{ states(inputs.motion_entity) }}"
+        motion_to_off: "{{ trigger.id == 'motion_entity_changed' and trigger.to_state.state == 'off' }}"
 
-      - stop: "Automation disabled. Nothing else to do."
+        lights: >
+          {% set ns = namespace(is_on=((inputs.target_lights | length) > 0)) %}
+          {% for light in inputs.target_lights %}
+            {% set ns.is_on = ns.is_on and is_state(light, 'on') %}
+          {% endfor %}
+          {{ 'on' if ns.is_on else 'off' }}
 
-  - alias: "If motion detected"
-    if:
-      - condition: state
-        entity_id: !input motion_entity
-        state: "on"
-    then:
-      - alias: "If any light is off"
-        if:
-          - condition: state
-            entity_id: !input target_lights
-            match: any
-            state: "off"
-        then:
+        automation: >
+          {% set ns = namespace(is_on=false)%}
+          {% for entity in inputs.enable_entities %}
+            {% set ns.is_on = ns.is_on or is_state(entity, 'on') %}
+          {% endfor %}
+          {{ 'on' if ns.is_on else 'off' }}
+        single_automation_entity_to_on: >
+          {{ trigger.id == 'enable_entities_changed' and trigger.to_state.state == 'on' }}
+
+        timer: "{{ states(inputs.wait_timer) }}"
+        timer_finished: "{{ trigger.id == 'timer_finished' }}"
+
+  - alias: "Compute actions"
+    variables:
+      actions:
+        lights: >
+          {% if input_states.single_automation_entity_to_on
+              or input_states.automation == 'off'
+              or input_states.motion_to_off %}
+            none
+          {% elif input_states.motion == 'on' or input_states.timer != 'idle' %}
+            turn_on
+          {% elif input_states.timer_finished %}
+            turn_off_warning
+          {% else %}
+            turn_off
+          {% endif %}
+        timer: >
+          {% if input_states.automation == 'off' or input_states.motion == 'on' %}
+            cancel
+          {% elif input_states.single_automation_entity_to_on and input_states.lights == 'on' %}
+            start
+          {% elif input_states.motion_to_off and input_states.lights == 'on' %}
+            reset
+          {% else %}
+            none
+          {% endif %}
+
+  - alias: "Control lights if needed"
+    choose:
+      - alias: "Turn lights on"
+        conditions: "{{ actions.lights == 'turn_on' and input_states.lights != 'on' }}"
+        sequence:
           - alias: "Turn on the scene"
             service: scene.turn_on
             target:
               entity_id: !input target_scenes
+      - alias: "Warn lights will turn off"
+        conditions: "{{ actions.lights == 'turn_off_warning' and input_states.lights != 'off' }}"
+        sequence:
+          - alias: "Turn light to 50%"
+            service: light.turn_on
+            target:
+              entity_id: !input target_lights
+            data:
+              brightness_pct: 50
+              transition: 2
+          - alias: "Async wait until warning period ends"
+            event: vqvu.async_wait.ping_request
+            event_data:
+              request:
+                delay: !input warning_delay
+                # Need to do it this way since directly setting the 'for'
+                # property will cause it to interpret the value as an integer.
+                reply: "{{ {'for': this.attributes.id} }}"
+      - alias: "Turn lights off"
+        conditions: "{{ actions.lights == 'turn_off' and input_states.lights != 'off' }}"
+        sequence:
+          - alias: "Turn off the lights"
+            service: light.turn_off
+            target:
+              entity_id: !input target_lights
+            data:
+              transition: 2
 
-      - alias: "Cancel the timer if it's still running"
-        service: timer.cancel
-        target:
-          entity_id: !input wait_timer
-
-      - alias: "Wait until there is no motion from device"
-        wait_for_trigger:
-          platform: state
-          entity_id: !input motion_entity
-          from: "on"
-          to: "off"
-
-      - alias: "Start the timer"
-        service: timer.start
-        target:
-          entity_id: !input wait_timer
-
-      - stop: "Lights turned on and timers set. Nothing else to do."
-
-  # Here, we know there is no motion.
-  - alias: "Check that some lights are on"
-    condition: state
-    entity_id: !input target_lights
-    match: any
-    state: "on"
-
-  - alias: "Check that the timer is no longer running"
-    condition: state
-    entity_id: !input wait_timer
-    state: "idle"
-
-  - alias: "Turn off the lights"
-    service: light.turn_off
-    target:
-      entity_id: !input target_lights
+  - alias: "Control timer if needed"
+    choose:
+      - alias: "Cancel timer"
+        conditions: "{{ actions.timer == 'cancel' and input_states.timer != 'idle' }}"
+        sequence:
+          - alias: "Cancel the timer"
+            service: timer.cancel
+            target:
+              entity_id: !input wait_timer
+      - alias: "Start timer"
+        conditions: "{{ actions.timer == 'start' and input_states.timer != 'active' }}"
+        sequence:
+          - alias: "Start the timer"
+            service: timer.start
+            target:
+              entity_id: !input wait_timer
+      - alias: "Reset timer"
+        conditions: "{{ actions.timer == 'reset' }}"
+        sequence:
+          - alias: "Cancel the timer"
+            service: timer.cancel
+            target:
+              entity_id: !input wait_timer
+          - alias: "Start the timer"
+            service: timer.start
+            target:
+              entity_id: !input wait_timer
