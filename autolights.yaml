@@ -65,7 +65,8 @@ blueprint:
     warning_delay:
       name: Warning delay
       description: How long to wait in the warning state.
-      default: "00:01:00"
+      default:
+        minutes: 1
       selector:
         duration:
 
