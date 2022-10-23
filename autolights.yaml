@@ -120,7 +120,7 @@ condition:
     condition: template
     value_template: >
       {{ trigger.id != 'warning_timer_finished'
-          or trigger.event.data.response.for == this.attributes.id }}
+          or trigger.event.data.headers.to == this.attributes.id }}
 
 action:
   - alias: "Compute input states"
@@ -196,11 +196,19 @@ action:
           - alias: "Async wait until warning period ends"
             event: vqvu.async_wait.ping_request
             event_data:
-              request:
-                delay: !input warning_delay
-                # Need to do it this way since directly setting the 'for'
-                # property will cause it to interpret the value as an integer.
-                reply: "{{ {'for': this.attributes.id} }}"
+              headers: >
+                {{
+                  {
+                    'from': this.attributes.id,
+                  }
+                }}
+              payload: >
+                {{
+                  {
+                    'delay': inputs.warning_delay,
+                    'reply': {},
+                  }
+                }}
       - alias: "Turn lights off"
         conditions: "{{ actions.lights == 'turn_off' and input_states.lights != 'off' }}"
         sequence:

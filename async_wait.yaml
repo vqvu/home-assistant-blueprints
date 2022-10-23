@@ -4,9 +4,20 @@ blueprint:
   description: >
     Replies to a ping after a specified amount of time. The time is extracted from the event.
 
-    Request:
-      delay: Amount of time to delay
-      reply: The reply that will be sent verbatim (in the "response" event_data field).
+    Calling convention.
+
+    Request event_data:
+      headers:
+        from: The ID of the caller. Will be reflected in the responsed.
+      payload:
+        delay: Amount of time to delay
+        reply: The reply to be reflected in the response payload.
+
+    Response event_data:
+      headers:
+        from: The ID of this automation.
+        to: The ID of the caller
+      payload: $request.payload.reply
   domain: automation
   input:
     request_event_type:
@@ -34,10 +45,16 @@ trigger:
     event_type: !input request_event_type
 
 action:
-  - alias: "Wait for requested delay"
-    delay: "{{ trigger.event.data.request.delay }}"
-
-  - alias: "Reply to request"
+  - alias: Wait for requested delay
+    delay: '{{ trigger.event.data.payload.delay }}'
+  - alias: Reply to request
     event: !input response_event_type
     event_data:
-      response: "{{ trigger.event.data.request.reply }}"
+      headers: >
+        {{
+          {
+            'from': this.attributes.id,
+            'to': trigger.event.data.headers.from,
+          }
+        }}
+      payload: "{{ trigger.event.data.payload.reply }}"
