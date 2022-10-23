@@ -128,6 +128,7 @@ action:
     variables:
       input_states:
         motion: "{{ states(inputs.motion_entity) }}"
+        motion_to_on: "{{ trigger.id == 'motion_entity_changed' and trigger.to_state.state == 'on' }}"
         motion_to_off: "{{ trigger.id == 'motion_entity_changed' and trigger.to_state.state == 'off' }}"
 
         lights: >
@@ -157,6 +158,8 @@ action:
               or input_states.automation == 'off'
               or input_states.motion_to_off %}
             none
+          {% elif input_states.motion_to_on %}
+            turn_on_forced
           {% elif input_states.motion == 'on' or input_states.timer != 'idle' %}
             turn_on
           {% elif input_states.timer_finished %}
@@ -178,7 +181,11 @@ action:
   - alias: "Control lights if needed"
     choose:
       - alias: "Turn lights on"
-        conditions: "{{ actions.lights == 'turn_on' and input_states.lights != 'on' }}"
+        conditions: >
+          {{
+            actions.lights == 'turn_on_forced'
+              or (actions.lights == 'turn_on' and input_states.lights != 'on')
+          }}
         sequence:
           - alias: "Turn on the scene"
             service: scene.turn_on
