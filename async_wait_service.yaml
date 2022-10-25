@@ -22,14 +22,14 @@ blueprint:
     request_event_type:
       name: "Request event type"
       description: "The event type to listen to."
-      default: "vqvu.async_wait.ping_request"
+      default: "vqvu.async_wait_service.wait_request"
       selector:
         text:
           type: text
     response_event_type:
       name: "Response event type"
       description: "The event type to reply to."
-      default: "vqvu.async_wait.ping_response"
+      default: "vqvu.async_wait_service.wait_response"
       selector:
         text:
           type: text

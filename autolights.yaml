@@ -108,7 +108,7 @@ trigger:
 
   - id: warning_timer_finished
     platform: event
-    event_type: vqvu.async_wait.ping_response
+    event_type: vqvu.async_wait_service.wait_response
     event_data:
       payload:
         for:
@@ -205,7 +205,7 @@ action:
               brightness_pct: 50
               transition: 2
           - alias: "Async wait until warning period ends"
-            event: vqvu.async_wait.ping_request
+            event: vqvu.async_wait_service.wait_request
             event_data:
               headers: >
                 {{
