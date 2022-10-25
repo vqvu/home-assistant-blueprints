@@ -109,7 +109,10 @@ trigger:
   - id: warning_timer_finished
     platform: event
     event_type: vqvu.async_wait.ping_response
-    event_data: {}
+    event_data:
+      payload:
+        for:
+          timer: !input wait_timer
 
 condition:
   - alias: "Automation should not be suppressed"
@@ -117,7 +120,7 @@ condition:
     entity_id: !input suppress_entity
     state: "off"
 
-  - alias: "Warning timer finished is for correct event"
+  - alias: "Warning timer finished is for this automation"
     condition: template
     value_template: >
       {{ trigger.id != 'warning_timer_finished'
@@ -214,7 +217,11 @@ action:
                 {{
                   {
                     'delay': inputs.warning_delay,
-                    'reply': {},
+                    'reply': {
+                      'for': {
+                        'timer': inputs.wait_timer,
+                      },
+                    },
                   }
                 }}
       - alias: "Turn lights off"
