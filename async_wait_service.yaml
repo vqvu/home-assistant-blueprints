@@ -1,10 +1,9 @@
 blueprint:
-  name: Async Wait Ping
-  source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/async_wait.yaml
+  name: Async Wait Service
+  source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/async_wait_service.yaml
   description: >
-    Replies to a ping after a specified amount of time. The time is extracted from the event.
-
-    Calling convention.
+    A service that replies to a ping after a specified amount of time.
+    The time to wait is extracted from the request.
 
     Request event_data:
       headers:
