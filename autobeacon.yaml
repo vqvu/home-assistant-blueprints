@@ -1,6 +1,6 @@
 blueprint:
   name: Autobeacon
-  source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/async_wait_service.yaml
+  source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/autobeacon.yaml
   description: |
     Turns on and off the Home Assistant companion app's BLE beacon when the
     person is home or away.
