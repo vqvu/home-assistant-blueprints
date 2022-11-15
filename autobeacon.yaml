@@ -2,7 +2,8 @@ blueprint:
   name: Autobeacon
   source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/async_wait_service.yaml
   description: |
-    Turns on and off the HASS app's BLE beacon when the person is home or away.
+    Turns on and off the Home Assistant companion app's BLE beacon when the
+    person is home or away.
   domain: automation
   input:
     tracker_entities:
@@ -26,6 +27,16 @@ blueprint:
         device:
           integration: mobile_app
 
+    enable_periodic_checks:
+      name: Enable periodic checks
+      description: >
+        If true, the automation will periodically check the state of the beacon
+        and turn it on or off as appropriate. Enabling this check will prevent
+        manual changes to the beacon state from sticking.
+      default: true
+      selector:
+        boolean:
+
 mode: queued
 max_exceeded: warning
 
@@ -35,6 +46,7 @@ variables:
     zones:
       - !input zone
     mobile_app: !input mobile_app
+    enable_periodic_checks: !input enable_periodic_checks
 
 trigger:
   - id: zones_entered
@@ -48,6 +60,17 @@ trigger:
     entity_id: !input tracker_entities
     zone: !input zone
     event: leave
+
+  - id: periodic_check_triggered
+    platform: time_pattern
+    hours: "*"
+
+condition:
+  - alias: "If a period trigger, then peridic check should be enabled."
+    condition: template
+    value_template: >
+      {{ trigger.id != periodic_check_triggered
+          or inputs.enable_periodic_checks }}
 
 action:
   - alias: "Compute input states (step 1)"
