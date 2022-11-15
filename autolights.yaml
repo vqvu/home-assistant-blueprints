@@ -94,7 +94,7 @@ trigger:
     entity_id: !input enable_entities
     from:
 
-  - id: suppress_entity_to_on
+  - id: suppress_entity_to_off
     platform: state
     entity_id: !input suppress_entity
     from: "on"
@@ -153,6 +153,8 @@ action:
         timer: "{{ states(inputs.wait_timer) }}"
         timer_finished: "{{ trigger.id == 'timer_finished' }}"
 
+        warning_timer_finished: "{{ trigger.id == 'warning_timer_finished' }}"
+
   - alias: "Compute actions"
     variables:
       actions:
@@ -165,10 +167,10 @@ action:
             turn_on_forced
           {% elif input_states.motion == 'on' or input_states.timer != 'idle' %}
             turn_on
-          {% elif input_states.timer_finished %}
-            turn_off_warning
-          {% else %}
+          {% elif input_states.warning_timer_finished %}
             turn_off
+          {% else %}
+            turn_off_warning
           {% endif %}
         timer: >
           {% if input_states.automation == 'off' or input_states.motion == 'on' %}
