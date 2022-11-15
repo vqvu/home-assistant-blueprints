@@ -1,0 +1,102 @@
+blueprint:
+  name: Autobeacon
+  source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/async_wait_service.yaml
+  description: |
+    Turns on and off the HASS app's BLE beacon when the person is home or away.
+  domain: automation
+  input:
+    tracker_entities:
+      name: Trackers
+      selector:
+        entity:
+          domain:
+            - person
+            - device_tracker
+          multiple: true
+
+    zone:
+      name: Zones
+      selector:
+        entity:
+          domain: zone
+
+    mobile_app:
+      name: Mobile App
+      selector:
+        device:
+          integration: mobile_app
+
+mode: queued
+max_exceeded: warning
+
+variables:
+  inputs:
+    tracker_entities: !input tracker_entities
+    zones:
+      - !input zone
+    mobile_app: !input mobile_app
+
+trigger:
+  - id: zones_entered
+    platform: zone
+    entity_id: !input tracker_entities
+    zone: !input zone
+    event: enter
+
+  - id: zones_exited
+    platform: zone
+    entity_id: !input tracker_entities
+    zone: !input zone
+    event: leave
+
+action:
+  - alias: "Compute input states (step 1)"
+    variables:
+      input_states1:
+        app_notify_service: >
+          notify.mobile_app_{{ device_attr(inputs.mobile_app, 'name') | slugify(separator='_') }}
+        zone_state_names: >
+          [
+            {% for zone in inputs.zones %}
+              {% set friendly_name = state_attr(zone, 'friendly_name') %}
+              {% if zone == 'zone.home' %}
+                "home"
+              {% elif friendly_name is none %}
+                "{{ zone | replace('zone.', '') | replace('_', ' ') }}"
+              {% else %}
+                "{{ friendly_name }}"
+              {% endif %}
+              ,
+            {% endfor %}
+          ]
+
+  - alias: "Compute input states (step 2)"
+    variables:
+      input_states2:
+        entities_in_zone: >
+          {% set ns = namespace(in_zone=(inputs.tracker_entities | length) > 0, entity_in_one_zone=false) %}
+          {% for entity in inputs.tracker_entities %}
+            {% set ns.entity_in_one_zone = false %}
+            {% for state in input_states1.zone_state_names %}
+              {% set ns.entity_in_one_zone = ns.entity_in_one_zone or is_state(entity, state) %}
+            {% endfor %}
+            {% set ns.in_zone = ns.in_zone and ns.entity_in_one_zone %}
+          {% endfor %}
+          {{ ns.in_zone }}
+
+  - alias: "Compute actions"
+    variables:
+      actions:
+        beacon: >
+          {% if input_states2.entities_in_zone %}
+            turn_on
+          {% else %}
+            turn_off
+          {% endif %}
+
+  - alias: "sync beacon transmission state"
+    service: "{{ input_states1.app_notify_service }}"
+    data:
+      message: "command_ble_transmitter"
+      data:
+        command: "{{ actions.beacon }}"
