@@ -135,18 +135,14 @@ action:
         motion_to_off: "{{ trigger.id == 'motion_entity_changed' and trigger.to_state.state == 'off' }}"
 
         lights: >
-          {% set ns = namespace(is_on=((inputs.target_lights | length) > 0)) %}
-          {% for light in inputs.target_lights %}
-            {% set ns.is_on = ns.is_on and is_state(light, 'on') %}
-          {% endfor %}
-          {{ 'on' if ns.is_on else 'off' }}
+          {% set lights_on = inputs.target_lights | select('is_state', 'on') | list %}
+          {% set all_lights_on = (lights_on | length) == (inputs.target_lights | length) %}
+          {{ 'on' if all_lights_on else 'off' }}
 
         automation: >
-          {% set ns = namespace(is_on=false)%}
-          {% for entity in inputs.enable_entities %}
-            {% set ns.is_on = ns.is_on or is_state(entity, 'on') %}
-          {% endfor %}
-          {{ 'on' if ns.is_on else 'off' }}
+          {% set enable_entities_on = inputs.enable_entities | select('is_state', 'on') | list %}
+          {% set automation_on = (enable_entities_on | length) > 0 %}
+          {{ 'on' if automation_on else 'off' }}
         single_automation_entity_to_on: >
           {{ trigger.id == 'enable_entities_changed' and trigger.to_state.state == 'on' }}
 

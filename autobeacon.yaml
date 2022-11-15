@@ -78,6 +78,7 @@ action:
       input_states1:
         app_notify_service: >
           notify.mobile_app_{{ device_attr(inputs.mobile_app, 'name') | slugify(separator='_') }}
+        # Hack to build an dynamic array.
         zone_state_names: >
           [
             {% for zone in inputs.zones %}
@@ -97,15 +98,8 @@ action:
     variables:
       input_states2:
         entities_in_zone: >
-          {% set ns = namespace(in_zone=(inputs.tracker_entities | length) > 0, entity_in_one_zone=false) %}
-          {% for entity in inputs.tracker_entities %}
-            {% set ns.entity_in_one_zone = false %}
-            {% for state in input_states1.zone_state_names %}
-              {% set ns.entity_in_one_zone = ns.entity_in_one_zone or is_state(entity, state) %}
-            {% endfor %}
-            {% set ns.in_zone = ns.in_zone and ns.entity_in_one_zone %}
-          {% endfor %}
-          {{ ns.in_zone }}
+          {% set entities_in_zone = inputs.tracker_entities | map('states') | select('in', input_states1.zone_state_names) | list %}
+          {{ (entities_in_zone | length) == (inputs.tracker_entities | length)}}
 
   - alias: "Compute actions"
     variables:
