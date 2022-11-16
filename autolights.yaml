@@ -2,13 +2,13 @@ blueprint:
   name: Autolights
   source_url: https://raw.githubusercontent.com/vqvu/home-assistant-blueprints/master/autolights.yaml
   description: |
-    Turn on a light when motion is detected.
+    Turn on a light when human presence is detected.
 
     Can be enabled and disabled using a binary sensor.
   domain: automation
   input:
-    motion_entity:
-      name: Motion Sensor
+    presence_entity:
+      name: Presence Sensor
       selector:
         entity:
           domain:
@@ -57,7 +57,7 @@ blueprint:
 
     wait_timer:
       name: Wait timer
-      description: A timer device that determines how long to leave the light on after last motion is detected.
+      description: A timer device that determines how long to leave the light on after last presence is detected.
       selector:
         entity:
           domain: timer
@@ -75,7 +75,7 @@ max_exceeded: warning
 
 variables:
   inputs:
-    motion_entity: !input motion_entity
+    presence_entity: !input presence_entity
     target_lights: !input target_lights
     target_scenes: !input target_scenes
     enable_entities: !input enable_entities
@@ -84,9 +84,9 @@ variables:
     warning_delay: !input warning_delay
 
 trigger:
-  - id: motion_entity_changed
+  - id: presence_entity_changed
     platform: state
-    entity_id: !input motion_entity
+    entity_id: !input presence_entity
     to:
 
   - id: enable_entities_changed
@@ -130,9 +130,9 @@ action:
   - alias: "Compute input states"
     variables:
       input_states:
-        motion: "{{ states(inputs.motion_entity) }}"
-        motion_to_on: "{{ trigger.id == 'motion_entity_changed' and trigger.to_state.state == 'on' }}"
-        motion_to_off: "{{ trigger.id == 'motion_entity_changed' and trigger.to_state.state == 'off' }}"
+        presence: "{{ states(inputs.presence_entity) }}"
+        presence_to_on: "{{ trigger.id == 'presence_entity_changed' and trigger.to_state.state == 'on' }}"
+        presence_to_off: "{{ trigger.id == 'presence_entity_changed' and trigger.to_state.state == 'off' }}"
 
         lights: >
           {% set lights_on = inputs.target_lights | select('is_state', 'on') | list %}
@@ -155,25 +155,21 @@ action:
     variables:
       actions:
         lights: >
-          {% if input_states.single_automation_entity_to_on
-              or input_states.automation == 'off'
-              or input_states.motion_to_off %}
-            none
-          {% elif input_states.motion_to_on %}
+          {% if input_states.presence_to_on %}
             turn_on_forced
-          {% elif input_states.motion == 'on' or input_states.timer != 'idle' %}
-            turn_on
+          {% elif input_states.timer_finished %}
+            turn_off_warning
           {% elif input_states.warning_timer_finished %}
             turn_off
           {% else %}
-            turn_off_warning
+            none
           {% endif %}
         timer: >
-          {% if input_states.automation == 'off' or input_states.motion == 'on' %}
+          {% if input_states.automation == 'off' or input_states.presence == 'on' %}
             cancel
           {% elif input_states.single_automation_entity_to_on and input_states.lights == 'on' %}
             start
-          {% elif input_states.motion_to_off and input_states.lights == 'on' %}
+          {% elif input_states.presence_to_off and input_states.lights == 'on' %}
             reset
           {% else %}
             none
