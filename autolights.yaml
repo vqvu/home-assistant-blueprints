@@ -87,7 +87,7 @@ trigger:
   - id: presence_entity_changed
     platform: state
     entity_id: !input presence_entity
-    to:
+    from:
 
   - id: enable_entities_changed
     platform: state
@@ -146,6 +146,8 @@ action:
         single_automation_entity_to_on: >
           {{ trigger.id == 'enable_entities_changed' and trigger.to_state.state == 'on' }}
 
+        suppress_entity_to_off: "{{ trigger.id == 'suppress_entity_to_off' }}"
+
         timer: "{{ states(inputs.wait_timer) }}"
         timer_finished: "{{ trigger.id == 'timer_finished' }}"
 
@@ -155,24 +157,40 @@ action:
     variables:
       actions:
         lights: >
-          {% if input_states.presence_to_on %}
+          {% if input_states.automation == 'on'
+              and input_states.presence_to_on %}
             turn_on_forced
-          {% elif input_states.timer_finished %}
+          {% elif input_states.automation == 'on'
+              and input_states.lights == 'on'
+              and input_states.timer_finished %}
             turn_off_warning
-          {% elif input_states.warning_timer_finished %}
+          {% elif input_states.automation == 'on'
+              and input_states.timer == 'idle'
+              and input_states.lights == 'on'
+              and input_states.suppress_entity_to_off %}
+            turn_off_warning
+          {% elif input_states.automation == 'on'
+              and input_states.warning_timer_finished %}
             turn_off
           {% else %}
             none
           {% endif %}
         timer: >
-          {% if input_states.automation == 'off' or input_states.presence == 'on' %}
-            cancel
-          {% elif input_states.single_automation_entity_to_on and input_states.lights == 'on' %}
-            start
-          {% elif input_states.presence_to_off and input_states.lights == 'on' %}
+          {% if input_states.single_automation_entity_to_on
+              and input_states.lights == 'on'
+              and input_states.presence == 'off' %}
+            start_if_not_running
+          {% elif input_states.automation == 'on'
+              and input_states.lights == 'on'
+              and input_states.presence_to_off %}
             reset
-          {% else %}
+          {% elif input_states.automation == 'on'
+              and input_states.lights == 'on'
+              and input_states.presence == 'off'
+              and input_states.timer == 'active' %}
             none
+          {% else %}
+            cancel
           {% endif %}
 
   - alias: "Control lights if needed"
@@ -238,7 +256,7 @@ action:
             target:
               entity_id: !input wait_timer
       - alias: "Start timer"
-        conditions: "{{ actions.timer == 'start' and input_states.timer != 'active' }}"
+        conditions: "{{ actions.timer == 'start_if_not_running' and input_states.timer != 'active' }}"
         sequence:
           - alias: "Start the timer"
             service: timer.start
