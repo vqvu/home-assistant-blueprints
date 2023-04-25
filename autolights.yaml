@@ -87,7 +87,8 @@ trigger:
   - id: presence_entity_changed
     platform: state
     entity_id: !input presence_entity
-    from:
+    not_from: "unavailable"
+    not_to: "unavailable"
 
   - id: enable_entities_changed
     platform: state
