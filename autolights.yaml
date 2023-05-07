@@ -87,8 +87,12 @@ trigger:
   - id: presence_entity_changed
     platform: state
     entity_id: !input presence_entity
-    not_from: "unavailable"
-    not_to: "unavailable"
+    not_from:
+      - unavailable
+      - unknown
+    not_to:
+      - unavailable
+      - unknown
 
   - id: enable_entities_changed
     platform: state
@@ -137,12 +141,14 @@ action:
 
         num_lights_total: "{{ inputs.target_lights | length }}"
         num_lights_on: "{{ inputs.target_lights | select('is_state', 'on') | list | length }}"
-        num_lights_above_warning_brightness: >
+        # Expected warning brightness is 128.
+        num_lights_near_warning_brightness: >
           {{
               inputs.target_lights
                   | map('state_attr', 'brightness')
                   | select('ne', None)
-                  | select('gt', 128)
+                  | select('gt', 126)
+                  | select('lt', 130)
                   | list
                   | length
           }}
@@ -162,11 +168,8 @@ action:
     variables:
       # States are:
       #  - suppressed: The automation is suppressed. It should not interact with the lights.
-      #  - person_present_lights_on:
-      #       The automation is enabled and a person is present and the lights are on.
-      #  - person_present_lights_not_on:
-      #       The automation is enabled and a person is present and the lights are off or in an
-      #       incorrect state (e.g., in the warning state).
+      #  - person_present:
+      #       The automation is enabled and a person is present.
       #  - person_not_present_lights_on:
       #       The automation is enabled and a person is not present, but the lights are on. This
       #       is a grace period where the lights stay on in case the person comes back.
@@ -177,26 +180,20 @@ action:
       #       The automation is enabled and a person is not present and the lights are off.
       current_state: >
         {% set all_lights_off = facts.num_lights_on == 0 %}
-        {% set all_above_warning_brightness = facts.num_lights_above_warning_brightness == facts.num_lights_total %}
+        {% set all_near_warning_brightness = facts.num_lights_near_warning_brightness == facts.num_lights_total %}
 
         {% if facts.automation == 'off' %}
           suppressed
         {% elif facts.presence == 'on' %}
-
-          {% if all_above_warning_brightness %}
-            person_present_lights_on
-          {% else %}
-            person_present_lights_not_on
-          {% endif %}
-
+          person_present
         {% else %}
 
           {% if all_lights_off %}
             person_not_present_lights_off
-          {% elif all_above_warning_brightness %}
-            person_not_present_lights_on
-          {% else %}
+          {% elif all_near_warning_brightness %}
             person_not_present_lights_off_warning
+          {% else %}
+            person_not_present_lights_on
           {% endif %}
 
         {% endif %}
